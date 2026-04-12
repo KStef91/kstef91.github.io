@@ -313,8 +313,7 @@
         wrapper.innerHTML = `
           <h2 style="margin:0 0 8px 0;">${escapeHtml(post.title)}</h2>
           <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')}</div>
-          <div>${escapeHtml(post.content).replace(/
-/g, '<br>')}</div>
+          <div>${escapeHtml(post.content).split('\n').join('<br>')}</div>
           ${post.image_url ? `<img class="thumb" src="${post.image_url}" alt="업로드 이미지">` : ''}
           ${isOwnPost ? `
             <div class="actions" style="margin-top:12px;">
@@ -634,8 +633,7 @@
     }
 
     function escapeAttr(str) {
-      return escapeHtml(str).replaceAll('
-', '&#10;');
+      return escapeHtml(str).replaceAll('\n', '&#10;');
     }
 
     await refreshAuthState();
