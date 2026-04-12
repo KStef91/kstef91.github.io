@@ -194,8 +194,8 @@
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-    const SUPABASE_URL = 'https://hmnlvsnmyvxydaytfisv.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtbmx2c25teXZ4eWRheXRmaXN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjYzMjQsImV4cCI6MjA5MTMwMjMyNH0.tHEoce4zErDPgl0jKz6EORrGxWAi0k5tYBrkGgZu4IE';
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const postsEl = document.getElementById('posts');
@@ -209,6 +209,8 @@
 
     let currentUser = null;
     let currentProfile = null;
+    let editingPostId = null;
+    let editingCommentId = null;
 
     signUpBtn.addEventListener('click', async () => {
       const email = document.getElementById('email').value.trim();
@@ -305,6 +307,7 @@
 
       postsEl.innerHTML = '';
       for (const post of posts) {
+        const isOwnPost = currentUser && post.author_id === currentUser.id;
         const wrapper = document.createElement('article');
         wrapper.className = 'post';
         wrapper.innerHTML = `
@@ -312,6 +315,21 @@
           <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')}</div>
           <div>${escapeHtml(post.content).replace(/\n/g, '<br>')}</div>
           ${post.image_url ? `<img class="thumb" src="${post.image_url}" alt="업로드 이미지">` : ''}
+          ${isOwnPost ? `
+            <div class="actions" style="margin-top:12px;">
+              <button data-post-id="${post.id}" class="editPostBtn light">글 수정</button>
+            </div>
+            <div id="edit-post-box-${post.id}" class="card hidden" style="margin-top:12px; padding:14px;">
+              <label for="edit-title-${post.id}">제목</label>
+              <input type="text" id="edit-title-${post.id}" value="${escapeAttr(post.title)}">
+              <label for="edit-content-${post.id}">내용</label>
+              <textarea id="edit-content-${post.id}">${escapeHtml(post.content)}</textarea>
+              <div class="actions">
+                <button data-post-id="${post.id}" class="savePostBtn">저장</button>
+                <button data-post-id="${post.id}" class="cancelPostBtn secondary">취소</button>
+              </div>
+            </div>
+          ` : ''}
           <div class="comment-box">
             <h3 style="margin:0 0 10px 0; font-size:16px;">댓글</h3>
             <div id="comments-${post.id}">불러오는 중...</div>
@@ -346,6 +364,49 @@
           await loadComments(postId);
         });
       });
+
+      document.querySelectorAll('.editPostBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const postId = Number(e.target.dataset.postId);
+          document.querySelectorAll('[id^="edit-post-box-"]').forEach(box => box.classList.add('hidden'));
+          document.getElementById(`edit-post-box-${postId}`)?.classList.remove('hidden');
+          editingPostId = postId;
+        });
+      });
+
+      document.querySelectorAll('.cancelPostBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const postId = Number(e.target.dataset.postId);
+          document.getElementById(`edit-post-box-${postId}`)?.classList.add('hidden');
+          if (editingPostId === postId) editingPostId = null;
+        });
+      });
+
+      document.querySelectorAll('.savePostBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const postId = Number(e.target.dataset.postId);
+          const title = document.getElementById(`edit-title-${postId}`).value.trim();
+          const content = document.getElementById(`edit-content-${postId}`).value.trim();
+          if (!title || !content) {
+            alert('제목과 내용을 모두 입력해주세요.');
+            return;
+          }
+
+          const { error } = await supabase
+            .from('posts')
+            .update({ title, content })
+            .eq('id', postId)
+            .eq('author_id', currentUser.id);
+
+          if (error) {
+            alert('글 수정 실패: ' + error.message);
+            return;
+          }
+
+          editingPostId = null;
+          await loadPosts();
+        });
+      });
     }
 
     async function loadComments(postId) {
@@ -368,14 +429,70 @@
 
       box.innerHTML = data.map(c => {
         const name = c.profiles?.display_name || '가족';
+        const isOwnComment = currentUser && c.author_id === currentUser.id;
         return `
           <div class="comment">
             <strong>${escapeHtml(name)}</strong>
             <div class="meta">${new Date(c.created_at).toLocaleString('ko-KR')}</div>
-            <span>${escapeHtml(c.content)}</span>
+            <div id="comment-view-${c.id}">${escapeHtml(c.content)}</div>
+            ${isOwnComment ? `
+              <div class="actions" style="margin-top:8px;">
+                <button data-comment-id="${c.id}" data-post-id="${postId}" class="editCommentBtn light">댓글 수정</button>
+              </div>
+              <div id="edit-comment-box-${c.id}" class="hidden" style="margin-top:8px;">
+                <input type="text" id="edit-comment-input-${c.id}" value="${escapeAttr(c.content)}">
+                <div class="actions">
+                  <button data-comment-id="${c.id}" data-post-id="${postId}" class="saveCommentBtn">저장</button>
+                  <button data-comment-id="${c.id}" class="cancelCommentBtn secondary">취소</button>
+                </div>
+              </div>
+            ` : ''}
           </div>
         `;
       }).join('');
+
+      box.querySelectorAll('.editCommentBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const commentId = Number(e.target.dataset.commentId);
+          box.querySelectorAll('[id^="edit-comment-box-"]').forEach(el => el.classList.add('hidden'));
+          document.getElementById(`edit-comment-box-${commentId}`)?.classList.remove('hidden');
+          editingCommentId = commentId;
+        });
+      });
+
+      box.querySelectorAll('.cancelCommentBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const commentId = Number(e.target.dataset.commentId);
+          document.getElementById(`edit-comment-box-${commentId}`)?.classList.add('hidden');
+          if (editingCommentId === commentId) editingCommentId = null;
+        });
+      });
+
+      box.querySelectorAll('.saveCommentBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const commentId = Number(e.target.dataset.commentId);
+          const postIdFromBtn = Number(e.target.dataset.postId);
+          const content = document.getElementById(`edit-comment-input-${commentId}`).value.trim();
+          if (!content) {
+            alert('댓글 내용을 입력해주세요.');
+            return;
+          }
+
+          const { error } = await supabase
+            .from('comments')
+            .update({ content })
+            .eq('id', commentId)
+            .eq('author_id', currentUser.id);
+
+          if (error) {
+            alert('댓글 수정 실패: ' + error.message);
+            return;
+          }
+
+          editingCommentId = null;
+          await loadComments(postIdFromBtn);
+        });
+      });
     }
 
     publishBtn.addEventListener('click', async () => {
@@ -435,6 +552,10 @@
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replaceAll('\n', '&#10;');
     }
 
     await refreshAuthState();
