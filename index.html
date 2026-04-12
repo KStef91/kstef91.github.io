@@ -313,7 +313,8 @@
         wrapper.innerHTML = `
           <h2 style="margin:0 0 8px 0;">${escapeHtml(post.title)}</h2>
           <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')}</div>
-          <div>${escapeHtml(post.content).replace(/\n/g, '<br>')}</div>
+          <div>${escapeHtml(post.content).replace(/
+/g, '<br>')}</div>
           ${post.image_url ? `<img class="thumb" src="${post.image_url}" alt="업로드 이미지">` : ''}
           ${isOwnPost ? `
             <div class="actions" style="margin-top:12px;">
@@ -324,8 +325,11 @@
               <input type="text" id="edit-title-${post.id}" value="${escapeAttr(post.title)}">
               <label for="edit-content-${post.id}">내용</label>
               <textarea id="edit-content-${post.id}">${escapeHtml(post.content)}</textarea>
+              <label for="edit-image-${post.id}">새 사진으로 교체</label>
+              <input type="file" id="edit-image-${post.id}" accept="image/*">
+              <div class="status">새 이미지를 선택하지 않으면 기존 이미지를 유지합니다.</div>
               <div class="actions">
-                <button data-post-id="${post.id}" class="savePostBtn">저장</button>
+                <button data-post-id="${post.id}" data-current-image="${post.image_url || ''}" class="savePostBtn">저장</button>
                 <button data-post-id="${post.id}" class="cancelPostBtn secondary">취소</button>
               </div>
             </div>
@@ -385,16 +389,36 @@
       document.querySelectorAll('.savePostBtn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const postId = Number(e.target.dataset.postId);
+          const currentImage = e.target.dataset.currentImage || null;
           const title = document.getElementById(`edit-title-${postId}`).value.trim();
           const content = document.getElementById(`edit-content-${postId}`).value.trim();
+          const newImageFile = document.getElementById(`edit-image-${postId}`).files[0];
           if (!title || !content) {
             alert('제목과 내용을 모두 입력해주세요.');
             return;
           }
 
+          let imageUrl = currentImage;
+
+          if (newImageFile) {
+            const safeName = newImageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const filePath = `${currentUser.id}/${Date.now()}-${safeName}`;
+            const { error: uploadError } = await supabase.storage
+              .from('family-news')
+              .upload(filePath, newImageFile, { upsert: false });
+
+            if (uploadError) {
+              alert('새 이미지 업로드 실패: ' + uploadError.message);
+              return;
+            }
+
+            const { data } = supabase.storage.from('family-news').getPublicUrl(filePath);
+            imageUrl = data.publicUrl;
+          }
+
           const { error } = await supabase
             .from('posts')
-            .update({ title, content })
+            .update({ title, content, image_url: imageUrl })
             .eq('id', postId)
             .eq('author_id', currentUser.id);
 
@@ -405,8 +429,6 @@
 
           editingPostId = null;
           await loadPosts();
-        });
-      });
     }
 
     async function loadComments(postId) {
@@ -555,7 +577,8 @@
     }
 
     function escapeAttr(str) {
-      return escapeHtml(str).replaceAll('\n', '&#10;');
+      return escapeHtml(str).replaceAll('
+', '&#10;');
     }
 
     await refreshAuthState();
