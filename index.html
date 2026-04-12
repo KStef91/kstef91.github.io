@@ -319,6 +319,7 @@
           ${isOwnPost ? `
             <div class="actions" style="margin-top:12px;">
               <button data-post-id="${post.id}" class="editPostBtn light">글 수정</button>
+              <button data-post-id="${post.id}" data-image-url="${post.image_url || ''}" class="deletePostBtn secondary">글 삭제</button>
             </div>
             <div id="edit-post-box-${post.id}" class="card hidden" style="margin-top:12px; padding:14px;">
               <label for="edit-title-${post.id}">제목</label>
@@ -429,6 +430,39 @@
 
           editingPostId = null;
           await loadPosts();
+        });
+      });
+
+      document.querySelectorAll('.deletePostBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const postId = Number(e.target.dataset.postId);
+          const imageUrl = e.target.dataset.imageUrl || '';
+          const ok = confirm('이 글을 삭제할까요? 연결된 댓글도 함께 삭제됩니다.');
+          if (!ok) return;
+
+          if (imageUrl) {
+            const marker = '/storage/v1/object/public/family-news/';
+            const idx = imageUrl.indexOf(marker);
+            if (idx !== -1) {
+              const filePath = decodeURIComponent(imageUrl.slice(idx + marker.length));
+              await supabase.storage.from('family-news').remove([filePath]);
+            }
+          }
+
+          const { error } = await supabase
+            .from('posts')
+            .delete()
+            .eq('id', postId)
+            .eq('author_id', currentUser.id);
+
+          if (error) {
+            alert('글 삭제 실패: ' + error.message);
+            return;
+          }
+
+          await loadPosts();
+        });
+      });
     }
 
     async function loadComments(postId) {
@@ -460,6 +494,7 @@
             ${isOwnComment ? `
               <div class="actions" style="margin-top:8px;">
                 <button data-comment-id="${c.id}" data-post-id="${postId}" class="editCommentBtn light">댓글 수정</button>
+                <button data-comment-id="${c.id}" data-post-id="${postId}" class="deleteCommentBtn secondary">댓글 삭제</button>
               </div>
               <div id="edit-comment-box-${c.id}" class="hidden" style="margin-top:8px;">
                 <input type="text" id="edit-comment-input-${c.id}" value="${escapeAttr(c.content)}">
@@ -512,6 +547,28 @@
           }
 
           editingCommentId = null;
+          await loadComments(postIdFromBtn);
+        });
+      });
+
+      box.querySelectorAll('.deleteCommentBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const commentId = Number(e.target.dataset.commentId);
+          const postIdFromBtn = Number(e.target.dataset.postId);
+          const ok = confirm('이 댓글을 삭제할까요?');
+          if (!ok) return;
+
+          const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', commentId)
+            .eq('author_id', currentUser.id);
+
+          if (error) {
+            alert('댓글 삭제 실패: ' + error.message);
+            return;
+          }
+
           await loadComments(postIdFromBtn);
         });
       });
