@@ -310,8 +310,8 @@
         return;
       }
       
-      const { data: { session } } = await supabase.auth.getSession();
-      currentUser = session?.user ?? null;
+      //const { data: { session } } = await supabase.auth.getSession();
+      //currentUser = session?.user ?? null;
 
       if (!currentUser) {
         currentProfile = null;
