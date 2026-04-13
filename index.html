@@ -317,35 +317,50 @@
           return;
         }
     
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', currentUser.id)
-          .maybeSingle();
-    
-        console.log('PROFILE:', profile);
-        console.log('PROFILE ERROR:', profileError);
-    
-        currentProfile = profile ?? {
-          id: currentUser.id,
-          email: currentUser.email,
-          display_name: '',
-          can_post: false
-        };
-    
-        const canPost = currentProfile.can_post === true;
-    
+        // Show signed-in UI immediately without waiting for profiles
         signedOutView.style.display = 'none';
         signedInView.style.display = 'block';
         profileCard.style.display = 'block';
-        editorCard.style.display = canPost ? 'block' : 'none';
+        editorCard.style.display = 'none';
     
-        document.getElementById('displayName').value = currentProfile.display_name || '';
-        accountName.textContent = currentProfile.display_name || '가족 계정';
+        accountName.textContent = '가족 계정';
         accountEmail.textContent = currentUser.email || '';
-        accountRole.textContent = canPost
-          ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
-          : '이 계정은 댓글 작성이 가능합니다.';
+        accountRole.textContent = '계정 정보를 불러오는 중...';
+    
+        console.log('refreshAuthState: signed-in UI shown');
+    
+        // Fetch profile in the background
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .maybeSingle()
+          .then(({ data: profile, error: profileError }) => {
+            console.log('PROFILE:', profile);
+            console.log('PROFILE ERROR:', profileError);
+    
+            currentProfile = profile ?? {
+              id: currentUser.id,
+              email: currentUser.email,
+              display_name: '',
+              can_post: false
+            };
+    
+            const canPost = currentProfile.can_post === true;
+    
+            document.getElementById('displayName').value = currentProfile.display_name || '';
+            accountName.textContent = currentProfile.display_name || '가족 계정';
+            accountEmail.textContent = currentUser.email || '';
+            accountRole.textContent = canPost
+              ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
+              : '이 계정은 댓글 작성이 가능합니다.';
+            editorCard.style.display = canPost ? 'block' : 'none';
+    
+            console.log('refreshAuthState: profile applied');
+          })
+          .catch(err => {
+            console.error('PROFILE FETCH FAILED:', err);
+          });
     
         console.log('refreshAuthState: done');
       } catch (err) {
@@ -773,9 +788,12 @@
 
     async function initializePage() {
       console.log('INITIALIZE PAGE');
-      await loadPosts();
-      await refreshAuthState();
-      await loadPosts();
+    
+      // show feed immediately
+      loadPosts().catch(err => console.error('loadPosts init failed:', err));
+    
+      // restore auth UI separately
+      refreshAuthState().catch(err => console.error('refreshAuthState init failed:', err));
     }
     
     window.addEventListener('load', initializePage);
@@ -784,9 +802,9 @@
       console.log('AUTH STATE CHANGE:', event, session);
       currentUser = session?.user ?? null;
     
-      setTimeout(async () => {
-        await refreshAuthState();
-        await loadPosts();
+      setTimeout(() => {
+        refreshAuthState().catch(err => console.error('refreshAuthState auth change failed:', err));
+        loadPosts().catch(err => console.error('loadPosts auth change failed:', err));
       }, 0);
     });
     
