@@ -291,13 +291,29 @@
       await refreshAuthState();
       await loadPosts();
     });
-
+    let currentUser = null;
+    let currentProfile = null;
+    let authReady = false;
+    
     async function refreshAuthState() {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error: sessionError
+      } = await supabase.auth.getSession();
+    
       console.log('SESSION ON LOAD:', session);
       console.log('SESSION ERROR:', sessionError);
     
-      currentUser = session?.user ?? null;
+      let resolvedUser = session?.user ?? null;
+    
+      if (!resolvedUser) {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        console.log('GET USER:', userData);
+        console.log('GET USER ERROR:', userError);
+        resolvedUser = userData?.user ?? null;
+      }
+    
+      currentUser = resolvedUser;
     
       if (!currentUser) {
         currentProfile = null;
@@ -307,6 +323,7 @@
         signedInView.style.display = 'none';
         document.getElementById('password').value = '';
         authStatus.textContent = '가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.';
+        authReady = true;
         return;
       }
     
@@ -339,6 +356,8 @@
       accountRole.textContent = canPost
         ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
         : '이 계정은 댓글 작성이 가능합니다.';
+    
+      authReady = true;
     }
 
     async function loadPosts() {
@@ -758,11 +777,13 @@
     }
 
     window.addEventListener('load', async () => {
+      authStatus.textContent = '계정 상태를 확인하는 중...';
       await refreshAuthState();
       await loadPosts();
     });
     
     supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('AUTH STATE CHANGE:', _event, session);
       currentUser = session?.user ?? null;
       await refreshAuthState();
       await loadPosts();
