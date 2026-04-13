@@ -219,6 +219,14 @@
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = supabase;
 
+    const publicSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
+
     const postsEl = document.getElementById('posts');
     const authStatus = document.getElementById('authStatus');
     const publishStatus = document.getElementById('publishStatus');
@@ -374,7 +382,7 @@
         console.log('loadPosts: start');
         postsEl.innerHTML = '<div class="card">불러오는 중...</div>';
     
-        const { data: posts, error } = await supabase
+        const { data: posts, error } = await publicSupabase
           .from('posts')
           .select('id, created_at, title, content, image_url, author_id')
           .order('created_at', { ascending: false });
@@ -397,7 +405,7 @@
         let profileMap = {};
     
         if (authorIds.length > 0) {
-          const { data: profileRows, error: profileRowsError } = await supabase
+          const { data: profileRows, error: profileRowsError } = await publicSupabase
             .from('profiles')
             .select('id, display_name')
             .in('id', authorIds);
@@ -477,7 +485,7 @@
     
     async function loadComments(postId) {
       const box = document.getElementById(`comments-${postId}`);
-      const { data, error } = await supabase
+      const { data, error } = await publicSupabase
         .from('comments')
         .select('id, created_at, content, author_id')
         .eq('post_id', postId)
