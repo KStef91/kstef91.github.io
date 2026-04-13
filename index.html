@@ -539,7 +539,7 @@
       const box = document.getElementById(`comments-${postId}`);
       const { data, error } = await supabase
         .from('comments')
-        .select('id, created_at, content, author_id, display_name')
+        .select('id, created_at, content, author_id')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
