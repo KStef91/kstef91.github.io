@@ -330,29 +330,48 @@
 
     async function loadPosts() {
       postsEl.innerHTML = '<div class="card">불러오는 중...</div>';
+    
       const { data: posts, error } = await supabase
         .from('posts')
-        .select('id, created_at, title, content, image_url, author_id, profiles!posts_author_id_fkey(display_name)')
+        .select('id, created_at, title, content, image_url, author_id')
         .order('created_at', { ascending: false });
-
+    
       if (error) {
         postsEl.innerHTML = `<div class="card">에러: ${error.message}</div>`;
         return;
       }
-
+    
       if (!posts || posts.length === 0) {
         postsEl.innerHTML = '<div class="card">아직 글이 없습니다.</div>';
         return;
       }
-
+    
+      const authorIds = [...new Set(posts.map(p => p.author_id).filter(Boolean))];
+    
+      let profileMap = {};
+    
+      if (authorIds.length > 0) {
+        const { data: profileRows } = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', authorIds);
+    
+        profileMap = Object.fromEntries(
+          (profileRows || []).map(p => [p.id, p.display_name || '가족'])
+        );
+      }
+    
       postsEl.innerHTML = '';
+    
       for (const post of posts) {
         const isOwnPost = currentUser && post.author_id === currentUser.id;
+        const authorName = profileMap[post.author_id] || '가족';
+    
         const wrapper = document.createElement('article');
         wrapper.className = 'post';
         wrapper.innerHTML = `
           <h2 style="margin:0 0 8px 0;">${escapeHtml(post.title)}</h2>
-          <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')} · 작성자: ${escapeHtml(post.profiles?.display_name || '가족')}</div>
+          <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')} · 작성자: ${escapeHtml(authorName)}</div>
           <div>${escapeHtml(post.content).split('\n').join('<br>')}</div>
           ${post.image_url ? `<img class="thumb" src="${post.image_url}" alt="업로드 이미지">` : ''}
           ${isOwnPost ? `
@@ -385,30 +404,39 @@
             ` : `<div class="status">댓글을 쓰려면 로그인해주세요.</div>`}
           </div>
         `;
+    
         postsEl.appendChild(wrapper);
         await loadComments(post.id);
       }
-
+    
       document.querySelectorAll('.commentBtn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const postId = Number(e.target.dataset.postId);
           const content = document.getElementById(`comment-${postId}`).value.trim();
+    
           if (!content) {
             alert('댓글을 입력해주세요.');
             return;
           }
+    
           const { error } = await supabase.from('comments').insert([
-            { post_id: postId, content, author_id: currentUser.id }
+            {
+              post_id: postId,
+              content,
+              author_id: currentUser.id
+            }
           ]);
+    
           if (error) {
             alert('댓글 저장 실패: ' + error.message);
             return;
           }
+    
           document.getElementById(`comment-${postId}`).value = '';
           await loadComments(postId);
         });
       });
-
+    
       document.querySelectorAll('.editPostBtn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const postId = Number(e.target.dataset.postId);
@@ -417,7 +445,7 @@
           editingPostId = postId;
         });
       });
-
+    
       document.querySelectorAll('.cancelPostBtn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const postId = Number(e.target.dataset.postId);
@@ -425,7 +453,7 @@
           if (editingPostId === postId) editingPostId = null;
         });
       });
-
+    
       document.querySelectorAll('.savePostBtn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const postId = Number(e.target.dataset.postId);
@@ -433,52 +461,54 @@
           const title = document.getElementById(`edit-title-${postId}`).value.trim();
           const content = document.getElementById(`edit-content-${postId}`).value.trim();
           const newImageFile = document.getElementById(`edit-image-${postId}`).files[0];
+    
           if (!title || !content) {
             alert('제목과 내용을 모두 입력해주세요.');
             return;
           }
-
+    
           let imageUrl = currentImage;
-
+    
           if (newImageFile) {
-            const safeName = newImageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const safeName = sanitizeFileName(newImageFile.name);
             const filePath = `${currentUser.id}/${Date.now()}-${safeName}`;
+    
             const { error: uploadError } = await supabase.storage
               .from('family-news')
               .upload(filePath, newImageFile, { upsert: false });
-
+    
             if (uploadError) {
               alert('새 이미지 업로드 실패: ' + uploadError.message);
               return;
             }
-
+    
             const { data } = supabase.storage.from('family-news').getPublicUrl(filePath);
             imageUrl = data.publicUrl;
           }
-
+    
           const { error } = await supabase
             .from('posts')
             .update({ title, content, image_url: imageUrl })
             .eq('id', postId)
             .eq('author_id', currentUser.id);
-
+    
           if (error) {
             alert('글 수정 실패: ' + error.message);
             return;
           }
-
+    
           editingPostId = null;
           await loadPosts();
         });
       });
-
+    
       document.querySelectorAll('.deletePostBtn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const postId = Number(e.target.dataset.postId);
           const imageUrl = e.target.dataset.imageUrl || '';
           const ok = confirm('이 글을 삭제할까요? 연결된 댓글도 함께 삭제됩니다.');
           if (!ok) return;
-
+    
           if (imageUrl) {
             const marker = '/storage/v1/object/public/family-news/';
             const idx = imageUrl.indexOf(marker);
@@ -487,28 +517,29 @@
               await supabase.storage.from('family-news').remove([filePath]);
             }
           }
-
+    
           const { error } = await supabase
             .from('posts')
             .delete()
             .eq('id', postId)
             .eq('author_id', currentUser.id);
-
+    
           if (error) {
             alert('글 삭제 실패: ' + error.message);
             return;
           }
-
+    
           await loadPosts();
         });
       });
     }
+    
 
     async function loadComments(postId) {
       const box = document.getElementById(`comments-${postId}`);
       const { data, error } = await supabase
         .from('comments')
-        .select('id, created_at, content, author_id, profiles(display_name)')
+        .select('id, created_at, content, author_id, display_name')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -705,6 +736,13 @@
       await refreshAuthState();
       await loadPosts();
     });
+
+    function sanitizeFileName(name) {
+      return Array.from(String(name)).map(ch => {
+        const allowed = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-';
+        return allowed.includes(ch) ? ch : '_';
+      }).join('');
+    }
 
     await refreshAuthState();
     await loadPosts();
