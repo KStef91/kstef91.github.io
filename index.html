@@ -291,9 +291,6 @@
       await refreshAuthState();
       await loadPosts();
     });
-    let currentUser = null;
-    let currentProfile = null;
-    let authReady = false;
     
     async function refreshAuthState() {
       const {
