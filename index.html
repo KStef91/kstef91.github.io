@@ -780,7 +780,14 @@
 
     window.addEventListener('load', async () => {
       authStatus.textContent = '계정 상태를 확인하는 중...';
+    
+      // Load feed right away
+      await loadPosts();
+    
+      // Then restore auth UI
       await refreshAuthState();
+    
+      // Re-render once more so comment boxes / edit buttons match auth state
       await loadPosts();
     });
     
