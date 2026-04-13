@@ -296,15 +296,16 @@
       try {
         console.log('refreshAuthState: start');
     
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('SESSION ON LOAD:', session);
-        console.log('SESSION ERROR:', sessionError);
+        if (!currentUser) {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          console.log('SESSION ON LOAD:', session);
+          console.log('SESSION ERROR:', sessionError);
+          currentUser = session?.user ?? null;
+        }
     
-        currentUser = session?.user ?? null;
         console.log('refreshAuthState: currentUser set', currentUser);
     
         if (!currentUser) {
-          console.log('refreshAuthState: no currentUser');
           currentProfile = null;
           editorCard.style.display = 'none';
           profileCard.style.display = 'none';
@@ -316,7 +317,6 @@
           return;
         }
     
-        console.log('refreshAuthState: querying profile');
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -334,9 +334,7 @@
         };
     
         const canPost = currentProfile.can_post === true;
-        console.log('refreshAuthState: canPost =', canPost);
     
-        console.log('refreshAuthState: applying signed-in UI');
         signedOutView.style.display = 'none';
         signedInView.style.display = 'block';
         profileCard.style.display = 'block';
@@ -348,14 +346,6 @@
         accountRole.textContent = canPost
           ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
           : '이 계정은 댓글 작성이 가능합니다.';
-    
-        console.log('UI STATE:', {
-          currentUser,
-          signedOutDisplay: signedOutView.style.display,
-          signedInDisplay: signedInView.style.display,
-          editorDisplay: editorCard.style.display,
-          profileDisplay: profileCard.style.display
-        });
     
         console.log('refreshAuthState: done');
       } catch (err) {
@@ -783,18 +773,21 @@
 
     async function initializePage() {
       console.log('INITIALIZE PAGE');
-    
+      await loadPosts();
       await refreshAuthState();
       await loadPosts();
     }
     
     window.addEventListener('load', initializePage);
     
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
       console.log('AUTH STATE CHANGE:', event, session);
       currentUser = session?.user ?? null;
-      await refreshAuthState();
-      await loadPosts();
+    
+      setTimeout(async () => {
+        await refreshAuthState();
+        await loadPosts();
+      }, 0);
     });
     
   </script>
