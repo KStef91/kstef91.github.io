@@ -468,7 +468,7 @@
       const box = document.getElementById(`comments-${postId}`);
       const { data, error } = await supabase
         .from('comments')
-        .select('id, created_at, content, author_id, profiles(display_name)')
+        .select('id, created_at, content, author_id')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -476,14 +476,29 @@
         box.innerHTML = `<div class="status">댓글 에러: ${error.message}</div>`;
         return;
       }
-
+      
       if (!data || data.length === 0) {
         box.innerHTML = '<div class="status">첫 댓글을 남겨보세요.</div>';
         return;
       }
 
+      const authorIds = [...new Set((data || []).map(c => c.author_id).filter(Boolean))];
+
+      let profileMap = {};
+      
+      if (authorIds.length > 0) {
+        const { data: profileRows } = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', authorIds);
+      
+        profileMap = Object.fromEntries(
+          (profileRows || []).map(p => [p.id, p.display_name || '가족'])
+        );
+      }
+
       box.innerHTML = data.map(c => {
-        const name = c.profiles?.display_name || '가족';
+        const name = profileMap[c.author_id] || '가족';
         const isOwnComment = currentUser && c.author_id === currentUser.id;
         return `
           <div class="comment">
