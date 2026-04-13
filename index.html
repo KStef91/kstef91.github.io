@@ -686,23 +686,35 @@
 
     async function initializePage() {
       console.log('INITIALIZE PAGE');
-    
-      // show feed immediately
-      loadPosts().catch(err => console.error('loadPosts init failed:', err));
-    
-      // restore auth UI separately
-      refreshAuthState().catch(err => console.error('refreshAuthState init failed:', err));
+      await refreshAuthState();
+      await loadPosts();
     }
     
-    window.addEventListener('load', initializePage);
+    window.addEventListener('load', () => {
+      initializePage().catch(err => console.error('initializePage failed:', err));
+    });
     
     supabase.auth.onAuthStateChange((event, session) => {
       console.log('AUTH STATE CHANGE:', event, session);
       currentUser = session?.user ?? null;
     
+      if (currentUser) {
+        signedOutView.style.display = 'none';
+        signedInView.style.display = 'block';
+        profileCard.style.display = 'block';
+        accountEmail.textContent = currentUser.email || '';
+      } else {
+        currentProfile = null;
+        editorCard.style.display = 'none';
+        profileCard.style.display = 'none';
+        signedOutView.style.display = 'block';
+        signedInView.style.display = 'none';
+        document.getElementById('password').value = '';
+      }
+    
       setTimeout(() => {
-        refreshAuthState().catch(err => console.error('refreshAuthState auth change failed:', err));
-        loadPosts().catch(err => console.error('loadPosts auth change failed:', err));
+        refreshAuthState().catch(err => console.error('refreshAuthState failed:', err));
+        loadPosts().catch(err => console.error('loadPosts failed:', err));
       }, 0);
     });
     
