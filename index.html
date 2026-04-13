@@ -293,6 +293,23 @@
     });
 
     async function refreshAuthState() {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('SESSION ON LOAD:', session);
+      console.log('SESSION ERROR:', error);
+    
+      currentUser = session?.user ?? null;
+    
+      if (!currentUser) {
+        currentProfile = null;
+        editorCard.style.display = 'none';
+        profileCard.style.display = 'none';
+        signedOutView.style.display = 'block';
+        signedInView.style.display = 'none';
+        document.getElementById('password').value = '';
+        authStatus.textContent = '가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.';
+        return;
+      }
+      
       const { data: { session } } = await supabase.auth.getSession();
       currentUser = session?.user ?? null;
 
