@@ -293,54 +293,74 @@
     });
     
     async function refreshAuthState() {
-      const { data: { session } } = await supabase.auth.getSession();
-      currentUser = session?.user ?? null;
+      try {
+        console.log('refreshAuthState: start');
     
-      if (!currentUser) {
-        currentProfile = null;
-        editorCard.style.display = 'none';
-        profileCard.style.display = 'none';
-        signedOutView.style.display = 'block';
-        signedInView.style.display = 'none';
-        document.getElementById('password').value = '';
-        authStatus.textContent = '가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.';
-        return;
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('SESSION ON LOAD:', session);
+        console.log('SESSION ERROR:', sessionError);
+    
+        currentUser = session?.user ?? null;
+        console.log('refreshAuthState: currentUser set', currentUser);
+    
+        if (!currentUser) {
+          console.log('refreshAuthState: no currentUser');
+          currentProfile = null;
+          editorCard.style.display = 'none';
+          profileCard.style.display = 'none';
+          signedOutView.style.display = 'block';
+          signedInView.style.display = 'none';
+          document.getElementById('password').value = '';
+          authStatus.textContent = '가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.';
+          console.log('refreshAuthState: signed-out UI applied');
+          return;
+        }
+    
+        console.log('refreshAuthState: querying profile');
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+    
+        console.log('PROFILE:', profile);
+        console.log('PROFILE ERROR:', profileError);
+    
+        currentProfile = profile ?? {
+          id: currentUser.id,
+          email: currentUser.email,
+          display_name: '',
+          can_post: false
+        };
+    
+        const canPost = currentProfile.can_post === true;
+        console.log('refreshAuthState: canPost =', canPost);
+    
+        console.log('refreshAuthState: applying signed-in UI');
+        signedOutView.style.display = 'none';
+        signedInView.style.display = 'block';
+        profileCard.style.display = 'block';
+        editorCard.style.display = canPost ? 'block' : 'none';
+    
+        document.getElementById('displayName').value = currentProfile.display_name || '';
+        accountName.textContent = currentProfile.display_name || '가족 계정';
+        accountEmail.textContent = currentUser.email || '';
+        accountRole.textContent = canPost
+          ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
+          : '이 계정은 댓글 작성이 가능합니다.';
+    
+        console.log('UI STATE:', {
+          currentUser,
+          signedOutDisplay: signedOutView.style.display,
+          signedInDisplay: signedInView.style.display,
+          editorDisplay: editorCard.style.display,
+          profileDisplay: profileCard.style.display
+        });
+    
+        console.log('refreshAuthState: done');
+      } catch (err) {
+        console.error('refreshAuthState FAILED:', err);
       }
-    
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentUser.id)
-        .maybeSingle();
-    
-      currentProfile = profile ?? {
-        id: currentUser.id,
-        email: currentUser.email,
-        display_name: '',
-        can_post: false
-      };
-    
-      const canPost = currentProfile.can_post === true;
-    
-      signedOutView.style.display = 'none';
-      signedInView.style.display = 'block';
-      profileCard.style.display = 'block';
-      editorCard.style.display = canPost ? 'block' : 'none';
-    
-      document.getElementById('displayName').value = currentProfile.display_name || '';
-      accountName.textContent = currentProfile.display_name || '가족 계정';
-      accountEmail.textContent = currentUser.email || '';
-      accountRole.textContent = canPost
-        ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
-        : '이 계정은 댓글 작성이 가능합니다.';
-
-      console.log('UI STATE:', {
-        currentUser,
-        signedOutDisplay: signedOutView.style.display,
-        signedInDisplay: signedInView.style.display,
-        editorDisplay: editorCard.style.display,
-        profileDisplay: profileCard.style.display
-      });
     }
 
     async function loadPosts() {
