@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>가족 뉴스v1</title>
+  <title>가족 뉴스</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -156,21 +156,41 @@
 
       <aside>
         <div class="card">
-          <h2 style="margin-top:0;">가족 로그인</h2>
+          <h2 style="margin-top:0;">계정</h2>
           <div class="badge">Supabase Auth</div>
 
-          <label for="email">이메일</label>
-          <input id="email" type="email" placeholder="family@example.com" />
+          <div id="signedOutView">
+            <label for="email">이메일</label>
+            <input id="email" type="email" placeholder="family@example.com" autocomplete="email" />
 
-          <label for="password">비밀번호</label>
-          <input id="password" type="password" placeholder="비밀번호" />
+            <label for="password">비밀번호</label>
+            <input id="password" type="password" placeholder="비밀번호" autocomplete="current-password" />
 
-          <div class="actions">
-            <button id="signUpBtn">회원가입</button>
-            <button id="signInBtn" class="secondary">로그인</button>
-            <button id="signOutBtn" class="light">로그아웃</button>
+            <div class="actions">
+              <button id="signInBtn">로그인</button>
+              <button id="signUpBtn" class="secondary">회원가입</button>
+            </div>
+            <div id="authStatus" class="status">가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.</div>
           </div>
-          <div id="authStatus" class="status">로그인하면 댓글을 쓸 수 있고, 작성 권한이 있는 가족 계정은 글도 올릴 수 있습니다.</div>
+
+          <div id="signedInView" style="display:none;">
+            <div class="status" style="margin-top:14px;">
+              <strong id="accountName">로그인됨</strong><br>
+              <span id="accountEmail"></span>
+            </div>
+            <div id="accountRole" class="status"></div>
+            <div class="actions">
+              <button id="signOutBtn" class="light">로그아웃</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="profileCard" style="display:none;">
+          <h2 style="margin-top:0;">내 프로필</h2>
+          <label for="displayName">표시 이름</label>
+          <input id="displayName" type="text" placeholder="예: 엄마, 아빠, 민수" />
+          <button id="saveProfileBtn">프로필 저장</button>
+          <div id="profileStatus" class="status">댓글과 글 작성자 이름에 표시됩니다.</div>
         </div>
 
         <div class="card" id="editorCard">
@@ -205,7 +225,15 @@
     const signUpBtn = document.getElementById('signUpBtn');
     const signInBtn = document.getElementById('signInBtn');
     const signOutBtn = document.getElementById('signOutBtn');
+    const signedOutView = document.getElementById('signedOutView');
+    const signedInView = document.getElementById('signedInView');
+    const accountName = document.getElementById('accountName');
+    const accountEmail = document.getElementById('accountEmail');
+    const accountRole = document.getElementById('accountRole');
     const publishBtn = document.getElementById('publishBtn');
+    const profileCard = document.getElementById('profileCard');
+    const saveProfileBtn = document.getElementById('saveProfileBtn');
+    const profileStatus = document.getElementById('profileStatus');
 
     let currentUser = null;
     let currentProfile = null;
@@ -226,6 +254,7 @@
         return;
       }
 
+      document.getElementById('password').value = '';
       authStatus.textContent = data.session
         ? '회원가입과 동시에 로그인되었습니다.'
         : '회원가입 완료. 이메일 인증을 켠 경우 메일함에서 인증 후 로그인해주세요.';
@@ -247,14 +276,13 @@
         return;
       }
 
-      authStatus.textContent = '로그인 성공';
+      document.getElementById('password').value = '';
       await refreshAuthState();
       await loadPosts();
     });
 
     signOutBtn.addEventListener('click', async () => {
       await supabase.auth.signOut();
-      authStatus.textContent = '로그아웃되었습니다.';
       await refreshAuthState();
       await loadPosts();
     });
@@ -271,6 +299,11 @@
       if (!currentUser) {
         currentProfile = null;
         editorCard.style.display = 'none';
+        profileCard.style.display = 'none';
+        signedOutView.style.display = 'block';
+        signedInView.style.display = 'none';
+        document.getElementById('password').value = '';
+        authStatus.textContent = '가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.';
         return;
       }
 
@@ -283,6 +316,13 @@
       currentProfile = profile ?? null;
       const canPost = currentProfile?.can_post === true;
       editorCard.style.display = canPost ? 'block' : 'none';
+      profileCard.style.display = 'block';
+      signedOutView.style.display = 'none';
+      signedInView.style.display = 'block';
+      document.getElementById('displayName').value = currentProfile?.display_name || '';
+      accountName.textContent = currentProfile?.display_name || '가족 계정';
+      accountEmail.textContent = currentUser.email || '';
+      accountRole.textContent = canPost ? '이 계정은 글 작성과 댓글 작성이 가능합니다.' : '이 계정은 댓글 작성이 가능합니다.';
       authStatus.textContent = canPost
         ? `로그인됨: ${currentUser.email} / 글 작성 가능`
         : `로그인됨: ${currentUser.email} / 댓글만 가능`;
@@ -292,7 +332,7 @@
       postsEl.innerHTML = '<div class="card">불러오는 중...</div>';
       const { data: posts, error } = await supabase
         .from('posts')
-        .select('id, created_at, title, content, image_url, author_id')
+        .select('id, created_at, title, content, image_url, author_id, profiles!posts_author_id_fkey(display_name)')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -312,7 +352,7 @@
         wrapper.className = 'post';
         wrapper.innerHTML = `
           <h2 style="margin:0 0 8px 0;">${escapeHtml(post.title)}</h2>
-          <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')}</div>
+          <div class="meta">${new Date(post.created_at).toLocaleString('ko-KR')} · 작성자: ${escapeHtml(post.profiles?.display_name || '가족')}</div>
           <div>${escapeHtml(post.content).split('\n').join('<br>')}</div>
           ${post.image_url ? `<img class="thumb" src="${post.image_url}" alt="업로드 이미지">` : ''}
           ${isOwnPost ? `
@@ -468,7 +508,7 @@
       const box = document.getElementById(`comments-${postId}`);
       const { data, error } = await supabase
         .from('comments')
-        .select('id, created_at, content, author_id')
+        .select('id, created_at, content, author_id, profiles(display_name)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
@@ -476,29 +516,14 @@
         box.innerHTML = `<div class="status">댓글 에러: ${error.message}</div>`;
         return;
       }
-      
+
       if (!data || data.length === 0) {
         box.innerHTML = '<div class="status">첫 댓글을 남겨보세요.</div>';
         return;
       }
 
-      const authorIds = [...new Set((data || []).map(c => c.author_id).filter(Boolean))];
-
-      let profileMap = {};
-      
-      if (authorIds.length > 0) {
-        const { data: profileRows } = await supabase
-          .from('profiles')
-          .select('id, display_name')
-          .in('id', authorIds);
-      
-        profileMap = Object.fromEntries(
-          (profileRows || []).map(p => [p.id, p.display_name || '가족'])
-        );
-      }
-
       box.innerHTML = data.map(c => {
-        const name = profileMap[c.author_id] || '가족';
+        const name = c.profiles?.display_name || '가족';
         const isOwnComment = currentUser && c.author_id === currentUser.id;
         return `
           <div class="comment">
@@ -650,6 +675,36 @@
     function escapeAttr(str) {
       return escapeHtml(str).replaceAll('\n', '&#10;');
     }
+
+    saveProfileBtn.addEventListener('click', async () => {
+      if (!currentUser) {
+        profileStatus.textContent = '먼저 로그인해주세요.';
+        return;
+      }
+
+      const displayName = document.getElementById('displayName').value.trim();
+      if (!displayName) {
+        profileStatus.textContent = '표시 이름을 입력해주세요.';
+        return;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: currentUser.id,
+          email: currentUser.email,
+          display_name: displayName
+        });
+
+      if (error) {
+        profileStatus.textContent = '프로필 저장 실패: ' + error.message;
+        return;
+      }
+
+      profileStatus.textContent = '프로필 저장 완료';
+      await refreshAuthState();
+      await loadPosts();
+    });
 
     await refreshAuthState();
     await loadPosts();
