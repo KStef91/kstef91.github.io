@@ -217,6 +217,7 @@
     const SUPABASE_URL = 'https://hmnlvsnmyvxydaytfisv.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtbmx2c25teXZ4eWRheXRmaXN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjYzMjQsImV4cCI6MjA5MTMwMjMyNH0.tHEoce4zErDPgl0jKz6EORrGxWAi0k5tYBrkGgZu4IE';
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabase = supabase;
 
     const postsEl = document.getElementById('posts');
     const authStatus = document.getElementById('authStatus');
