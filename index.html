@@ -757,8 +757,17 @@
       }).join('');
     }
 
-    await refreshAuthState();
-    await loadPosts();
+    window.addEventListener('load', async () => {
+      await refreshAuthState();
+      await loadPosts();
+    });
+    
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      currentUser = session?.user ?? null;
+      await refreshAuthState();
+      await loadPosts();
+    });
+    
   </script>
 </body>
 </html>
