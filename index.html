@@ -383,11 +383,13 @@
       let profileMap = {};
     
       if (authorIds.length > 0) {
-        const { data: profileRows } = await supabase
+        const { data: profileRows, error: profileRowsError } = await supabase
           .from('profiles')
           .select('id, display_name')
           .in('id', authorIds);
-    
+      
+        console.log('POST AUTHOR PROFILE ERROR:', profileRowsError);
+      
         profileMap = Object.fromEntries(
           (profileRows || []).map(p => [p.id, p.display_name || '가족'])
         );
