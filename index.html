@@ -293,24 +293,11 @@
     });
     
     async function refreshAuthState() {
-      const {
-        data: { session },
-        error: sessionError
-      } = await supabase.auth.getSession();
-    
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       console.log('SESSION ON LOAD:', session);
       console.log('SESSION ERROR:', sessionError);
     
-      let resolvedUser = session?.user ?? null;
-    
-      if (!resolvedUser) {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        console.log('GET USER:', userData);
-        console.log('GET USER ERROR:', userError);
-        resolvedUser = userData?.user ?? null;
-      }
-    
-      currentUser = resolvedUser;
+      currentUser = session?.user ?? null;
     
       if (!currentUser) {
         currentProfile = null;
@@ -320,7 +307,6 @@
         signedInView.style.display = 'none';
         document.getElementById('password').value = '';
         authStatus.textContent = '가족 계정으로 로그인하거나 새 계정을 만들 수 있습니다.';
-        authReady = true;
         return;
       }
     
@@ -330,7 +316,6 @@
         .eq('id', currentUser.id)
         .maybeSingle();
     
-      console.log('PROFILE:', profile);
       console.log('PROFILE ERROR:', profileError);
     
       currentProfile = profile ?? {
@@ -340,21 +325,19 @@
         can_post: false
       };
     
-      const canPost = currentProfile?.can_post === true;
+      const canPost = currentProfile.can_post === true;
     
       editorCard.style.display = canPost ? 'block' : 'none';
       profileCard.style.display = 'block';
       signedOutView.style.display = 'none';
       signedInView.style.display = 'block';
     
-      document.getElementById('displayName').value = currentProfile?.display_name || '';
-      accountName.textContent = currentProfile?.display_name || '가족 계정';
+      document.getElementById('displayName').value = currentProfile.display_name || '';
+      accountName.textContent = currentProfile.display_name || '가족 계정';
       accountEmail.textContent = currentUser.email || '';
       accountRole.textContent = canPost
         ? '이 계정은 글 작성과 댓글 작성이 가능합니다.'
         : '이 계정은 댓글 작성이 가능합니다.';
-    
-      authReady = true;
     }
 
     async function loadPosts() {
@@ -378,7 +361,7 @@
       const authorIds = [...new Set(posts.map(p => p.author_id).filter(Boolean))];
     
       let profileMap = {};
-    
+
       if (authorIds.length > 0) {
         const { data: profileRows, error: profileRowsError } = await supabase
           .from('profiles')
